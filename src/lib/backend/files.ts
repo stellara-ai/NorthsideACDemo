@@ -1,0 +1,125 @@
+// File storage for the app backend: upload files, build view URLs, and download a file's bytes.
+
+import { auth, AuthError } from "./auth";
+import { bucketIdPrefix, config } from "./config";
+import { apiBase, authHeaders, BackendError } from "./data";
+import type { UploadedFile } from "./types";
+
+export interface UploadOptions {
+  /** Override the stored filename (defaults to the File's name). */
+  name?: string;
+  /** Provide a specific file id (defaults to a server-generated one). */
+  fileId?: string;
+  /** company_members buckets: the company the file belongs to (a member's only company when omitted). */
+  companyId?: string;
+  /** company_members buckets: only staff of the company see the file. */
+  staffOnly?: boolean;
+}
+
+/** Upload to a company bucket: through the platform, which grants the file to its company. */
+async function uploadToCompanyBucket(bucketName: string, file: File | Blob, name: string, options: UploadOptions): Promise<string> {
+  const session = auth.currentSession();
+  if (!session || session.expires_at * 1000 <= Date.now()) throw new AuthError(401);
+  const form = new FormData();
+  form.append("file", file, name);
+  if (options.companyId) form.append("company_id", options.companyId);
+  if (options.staffOnly) form.append("staff_only", "true");
+  // The platform's route (the auth URL's sibling) takes the bucket's NAME; it maps the id itself.
+  const appBase = config.authBaseUrl.replace(/\/+$/, "").replace(/\/auth$/, "");
+  const res = await fetch(`${appBase}/company/buckets/${encodeURIComponent(bucketName)}/files`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.session}` },
+    body: form,
+  });
+  if (res.status === 401) {
+    await auth.logout();
+    throw new AuthError(401);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new BackendError(res.status, text);
+  }
+  const raw = (await res.json()) as Record<string, unknown>;
+  return String(raw["$id"] ?? "");
+}
+
+/**
+ * The id the backend stores a bucket under. A bucket's name (as the backend tools took it)
+ * maps to this app's id exactly as the server builds it: lowercase, every run of other
+ * characters a hyphen, at most 12 characters. A full id passes through unchanged.
+ */
+function bucketId(bucket: string): string {
+  if (bucketIdPrefix.length === 0 || bucket.startsWith(bucketIdPrefix)) return bucket;
+  const slug = bucket
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 12)
+    .replace(/^-+|-+$/g, "");
+  return `${bucketIdPrefix}${slug.length > 0 ? slug : "r"}`;
+}
+
+/** The storage path of one stored file, under the bucket's id. */
+function filePath(bucket: string, fileId: string): string {
+  return (
+    `${apiBase()}/storage/buckets/${encodeURIComponent(bucketId(bucket))}` +
+    `/files/${encodeURIComponent(fileId)}`
+  );
+}
+
+/**
+ * The view URL of a stored file. A plain link or <img> sends no sign-in, so this URL opens
+ * only for a file in a public_read bucket; read a file from any other bucket with download().
+ */
+export function fileUrl(bucket: string, fileId: string): string {
+  return `${filePath(bucket, fileId)}/view?project=${encodeURIComponent(config.projectId)}`;
+}
+
+export const files = {
+  /** Upload a File/Blob to a bucket (by its name) and return its id, name, and view URL. */
+  async upload(bucket: string, file: File | Blob, options: UploadOptions = {}): Promise<UploadedFile> {
+    if (config.buckets?.[bucket] === "company_members") {
+      const name = options.name ?? (file instanceof File ? file.name : "upload");
+      const id = await uploadToCompanyBucket(bucket, file, name, options);
+      // A company file opens with download(); url() opens only public_read files.
+      return { id, name, url: fileUrl(bucket, id) };
+    }
+    const form = new FormData();
+    form.append("fileId", options.fileId ?? "unique()");
+    const name = options.name ?? (file instanceof File ? file.name : "upload");
+    form.append("file", file, name);
+
+    // Auth headers only — the browser sets the multipart Content-Type + boundary.
+    const headers = await authHeaders();
+    const res = await fetch(`${apiBase()}/storage/buckets/${encodeURIComponent(bucketId(bucket))}/files`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text.length > 0 ? text : `upload_failed_${res.status}`);
+    }
+    const raw = (await res.json()) as Record<string, unknown>;
+    const id = String(raw["$id"] ?? "");
+    return { id, name: String(raw["name"] ?? name), url: fileUrl(bucket, id) };
+  },
+
+  /** View URL for an already-uploaded file (it opens without sign-in only on a public_read bucket). */
+  url: fileUrl,
+
+  /**
+   * A stored file's bytes, read as the signed-in user. Show or save it with
+   * URL.createObjectURL(blob). With nobody signed in it throws AuthError (status 401)
+   * before any request, as upload() does; a file in a public_read bucket opens with url().
+   * A refusal throws BackendError with the server's status (404: no such file for this user).
+   */
+  async download(bucket: string, fileId: string): Promise<Blob> {
+    const res = await fetch(`${filePath(bucket, fileId)}/download`, { headers: await authHeaders() });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new BackendError(res.status, text);
+    }
+    return await res.blob();
+  },
+};

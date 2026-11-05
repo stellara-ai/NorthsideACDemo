@@ -1,0 +1,21 @@
+{
+  "buckets": [],
+  "functions": [],
+  "tables": [
+    {
+      "access": "user_private",
+      "columns": [
+        {
+          "array": false,
+          "default": null,
+          "name": "x",
+          "required": false,
+          "type": "enum",
+          "values": []
+        }
+      ],
+      "indexes": [],
+      "name": "noop"
+    }
+  ]
+}
