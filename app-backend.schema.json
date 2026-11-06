@@ -1,6 +1,12 @@
 {
   "buckets": [],
-  "functions": [],
+  "functions": [
+    {
+      "entrypoint": "main.py",
+      "name": "dashboard-da",
+      "runtime": "python-3.12"
+    }
+  ],
   "tables": [
     {
       "access": "user_private",
