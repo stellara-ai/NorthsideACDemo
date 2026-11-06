@@ -2,6 +2,11 @@
   "buckets": [],
   "functions": [
     {
+      "entrypoint": "probe_main.py",
+      "name": "crm-probe",
+      "runtime": "python-3.12"
+    },
+    {
       "entrypoint": "main.py",
       "name": "dashboard-da",
       "runtime": "python-3.12"
