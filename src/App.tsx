@@ -71,7 +71,7 @@ function Login({ onSignedIn, err }: { onSignedIn: (u: any) => void; err: string 
   return (
     <div className="gate-wrap">
       <form className="card gate-card" onSubmit={submit}>
-        <h1 className="gate-title">Northside Portal</h1>
+        <h1 className="gate-title">Northside Application</h1>
         <p className="gate-sub">Owner dashboard for Northside Heating &amp; Air</p>
         {err ? <p className="gate-msg">{err}</p> : null}
         <label className="gate-label">
