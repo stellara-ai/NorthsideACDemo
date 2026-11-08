@@ -97,3 +97,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px}
 .empty{color:var(--muted);padding:14px 4px}
 @media (max-width:920px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:520px){.big strong{font-size:32px}.rows button{grid-template-columns:minmax(0,1fr) auto}.rows time{grid-column:1/-1}}
+/* Keep headings dark ink on white cards: the starter index.css colors h1/h2 with --text-h, which turns near-white in OS dark mode */
+.dash-root h1,.dash-root h2,.dash-root h3{color:var(--ink);font-family:var(--sans)}
+.dash-root .card-h h2,.dash-root h3{color:#3d4456;font-weight:650}
+.dash-root h1{font-weight:700}
