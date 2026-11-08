@@ -9,7 +9,7 @@
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--sans);font-variant-numeric:tabular-nums}
 button{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--violet);outline-offset:2px}
-main{max-width:1240px;margin:0 auto;padding-block:22px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+main{max-width:none;width:100%;margin:0;padding-block:22px 28px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
 header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
 .ttl{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 h1{margin:0;font-size:26px;letter-spacing:-.01em}
