@@ -103,6 +103,28 @@ export interface AppUser {
   company_access_level?: CompanyAccessLevel | null;
   /** The companies a member or company staff belongs to (staff and admin reach every company). */
   company_ids?: string[];
+  /**
+   * Bytes this user's files hold in the app's buckets, from the app's last measurement (taken at
+   * least once a day; null before the first). On /auth/me, sign-up and login; for current numbers
+   * call backend.files.usage().
+   */
+  storage_used_bytes?: number | null;
+  /** The storage limit that applies to this user, in bytes (their own, else the app's default); null = no limit. */
+  storage_limit_bytes?: number | null;
+}
+
+/**
+ * What the signed-in user stores in this app's buckets (backend.files.usage()), in bytes. A null
+ * limit means no limit. The limit is the app's to enforce: compare a file's size with the space
+ * left before uploading it, counting your own recent uploads on top (measured_at is normally a
+ * minute old; the storage doc, Usage and limits).
+ */
+export interface StorageUsage {
+  used_bytes: number;
+  limit_bytes: number | null;
+  remaining_bytes: number | null;
+  /** When the app's buckets were measured (ISO 8601, UTC); measured again at most once a minute. */
+  measured_at: string;
 }
 
 /** Session payload returned by signup/login and cached in localStorage. */

@@ -45,6 +45,7 @@ export type {
   Row,
   Session,
   SortSpec,
+  StorageUsage,
   TableAccess,
   Unsubscribe,
   UploadedFile,
@@ -54,5 +55,7 @@ export type {
 
 export { AuthError } from "./auth";
 export { BackendError, CounterLimitError } from "./data";
+export { readStorageLimitError } from "./storageLimit";
+export type { StorageLimitExceeded } from "./storageLimit";
 
 export default backend;

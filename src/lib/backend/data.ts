@@ -6,7 +6,7 @@
 // never surfaced to app code or end users.
 
 import { auth, AuthError } from "./auth";
-import { config } from "./config";
+import { arrayColumns, config } from "./config";
 import { subscribeToRow, subscribeToTable } from "./realtime";
 import type {
   BulkImportOptions,
@@ -214,10 +214,20 @@ export function hydrateRow(raw: Record<string, unknown>): Row {
   return row;
 }
 
-/** Stringify object/array values so JSON columns round-trip through text storage. */
-function serialize(data: Record<string, unknown>): Record<string, unknown> {
+/**
+ * Stringify object/array values so JSON columns round-trip through text storage. A value for
+ * one of the table's array columns (config.ts, `arrayColumns`) is sent as it is: the backend
+ * takes only a list there, and refuses the JSON text ("must be an array").
+ */
+function serialize(table: string, data: Record<string, unknown>): Record<string, unknown> {
+  // Own keys only: a table named after an Object.prototype member ("constructor") is not listed.
+  const listColumns = Object.prototype.hasOwnProperty.call(arrayColumns, table) ? arrayColumns[table] : [];
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (listColumns.includes(key)) {
+      out[key] = value;
+      continue;
+    }
     out[key] = value !== null && typeof value === "object" ? JSON.stringify(value) : value;
   }
   return out;
@@ -226,7 +236,8 @@ function serialize(data: Record<string, unknown>): Record<string, unknown> {
 /**
  * Add one row for a visitor who is NOT signed in. Only a `public_create` table takes
  * it, and only through the platform, which checks the columns and limits how often
- * one visitor can submit; the new row is the only thing that comes back.
+ * one visitor can submit; the new row is the only thing that comes back. `data` is the
+ * row as serialize() left it.
  */
 async function submitSignedOut(
   table: string,
@@ -237,7 +248,7 @@ async function submitSignedOut(
   const res = await fetch(`${appBase}/tables/${encodeURIComponent(table)}/rows`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data: serialize(data) }),
+    body: JSON.stringify({ data }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -269,7 +280,8 @@ export function readBackendError(err: unknown): { status: number; error: string;
 /**
  * A create or change on a company table (company_members). The backend grants nobody
  * a write there: the platform checks the caller's company access and the record's
- * references, then writes it with the company's grants.
+ * references, then writes it with the company's grants. `data` is the row as serialize()
+ * left it.
  */
 async function companyWrite(
   method: "POST" | "PATCH",
@@ -281,7 +293,7 @@ async function companyWrite(
   const res = await fetch(`${platformBase()}/company${path}`, {
     method,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.session}` },
-    body: JSON.stringify({ data: serialize(data) }),
+    body: JSON.stringify({ data }),
   });
   if (res.status === 401) {
     await auth.logout();
@@ -521,35 +533,37 @@ export function from<T extends Record<string, any> = Row>(table: string): TableC
     },
 
     async create(data: Record<string, unknown>): Promise<T> {
-      if (companyScoped) return hydrateRow(await companyWrite("POST", companyRows, data)) as unknown as T;
+      const row = serialize(table, data);
+      if (companyScoped) return hydrateRow(await companyWrite("POST", companyRows, row)) as unknown as T;
       const takesSignedOut = config.tables[table] === "public_create";
       if (takesSignedOut && !auth.isAuthenticated()) {
-        return hydrateRow(await submitSignedOut(table, data)) as unknown as T;
+        return hydrateRow(await submitSignedOut(table, row)) as unknown as T;
       }
       try {
         // No permissions field — table defaults apply (see access mode).
         const raw = await dataFetch(rowsPath, {
           method: "POST",
-          body: JSON.stringify({ rowId: "unique()", data: serialize(data) }),
+          body: JSON.stringify({ rowId: "unique()", data: row }),
         });
         return hydrateRow(raw ?? {}) as unknown as T;
       } catch (err) {
         // The stored sign-in was refused before anything was written, and that
         // cleared it: a public_create row is still welcome from a signed-out visitor.
         if (takesSignedOut && err instanceof AuthError && err.status === 401) {
-          return hydrateRow(await submitSignedOut(table, data)) as unknown as T;
+          return hydrateRow(await submitSignedOut(table, row)) as unknown as T;
         }
         throw err;
       }
     },
 
     async update(id: string, data: Record<string, unknown>): Promise<T> {
+      const row = serialize(table, data);
       if (companyScoped) {
-        return hydrateRow(await companyWrite("PATCH", `${companyRows}/${encodeURIComponent(id)}`, data)) as unknown as T;
+        return hydrateRow(await companyWrite("PATCH", `${companyRows}/${encodeURIComponent(id)}`, row)) as unknown as T;
       }
       const raw = await dataFetch(`${rowsPath}/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ data: serialize(data) }),
+        body: JSON.stringify({ data: row }),
       });
       return hydrateRow(raw ?? {}) as unknown as T;
     },
@@ -560,7 +574,7 @@ export function from<T extends Record<string, any> = Row>(table: string): TableC
       // an existing row keeps its own grants.
       const raw = await dataFetch(`${rowsPath}/${encodeURIComponent(id)}`, {
         method: "PUT",
-        body: JSON.stringify({ data: serialize(data) }),
+        body: JSON.stringify({ data: serialize(table, data) }),
       });
       return hydrateRow(raw ?? {}) as unknown as T;
     },
@@ -593,7 +607,7 @@ export function from<T extends Record<string, any> = Row>(table: string): TableC
       }
       const result: BulkImportResult = { created: 0, updated: 0, failed: 0, errors: [] };
       for (let start = 0, chunk = 0; start < rows.length; start += chunkSize, chunk++) {
-        const slice = rows.slice(start, start + chunkSize).map((row) => serialize(row));
+        const slice = rows.slice(start, start + chunkSize).map((row) => serialize(table, row));
         const key = options.importKey ? `${options.importKey}:${chunk}` : undefined;
         const answer = await importChunk(table, slice, mode, key);
         result.created += answer.created;

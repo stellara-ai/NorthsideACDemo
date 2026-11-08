@@ -23,3 +23,17 @@ export const functionIdPrefix = "fn-3355171aebf84a50-";
 
 /** Every bucket of this app has the id `<prefix><slug>`; the app passes the bucket's name and the helper maps it. */
 export const bucketIdPrefix = "bkt-3355171aebf84a50-";
+
+/**
+ * The buckets (by slug) whose uploads go through the platform, which refuses a file past the user's
+ * storage limit. Its own export, not a key of `config`: this file is regenerated on every setup while
+ * an edited types.ts is kept, and a key its BackendConfig does not declare would fail the type-check.
+ */
+export const enforcedBuckets: string[] = [];
+
+/**
+ * Table name -> the names of its array columns (created with `array: true`). A value sent to one of
+ * them goes to the backend as it is, a list, which is what an array column takes; every other
+ * object or array value is stored as JSON text. Tables with no array column are not listed.
+ */
+export const arrayColumns: Record<string, readonly string[]> = {};

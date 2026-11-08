@@ -3,6 +3,7 @@
 
 import { auth, AuthError } from "./auth";
 import { functionIdPrefix } from "./config";
+import { resourceSlug } from "./ids";
 import { apiBase, platformBase, visitorHeaders, WIRE_HEADERS } from "./data";
 import type { FunctionResult } from "./types";
 
@@ -15,10 +16,16 @@ export interface CallOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 }
 
-/** The id the backend runs a function under: a slug maps to this app's id, a full id passes through. */
+/**
+ * The id the backend runs a function under. A function's name (the name it was deployed
+ * with, or the slug the backend tools print) maps to this app's id exactly as the server
+ * builds it: lowercase, every run of other characters a hyphen, at most 12 characters. A
+ * full id passes through, with the same rule applied to what follows the prefix.
+ */
 function functionId(name: string): string {
-  if (functionIdPrefix.length === 0 || name.startsWith(functionIdPrefix)) return name;
-  return `${functionIdPrefix}${name}`;
+  if (functionIdPrefix.length === 0) return name;
+  const rest = name.startsWith(functionIdPrefix) ? name.slice(functionIdPrefix.length) : name;
+  return `${functionIdPrefix}${resourceSlug(rest)}`;
 }
 
 export const functions = {
